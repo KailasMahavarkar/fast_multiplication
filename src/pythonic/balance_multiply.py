@@ -1,4 +1,4 @@
-class Multiply:
+class BalanceMultiply:
     def balancePair(self, numA, numB):
         accumulator = 0
         steps = 0
