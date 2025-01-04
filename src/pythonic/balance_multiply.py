@@ -1,7 +1,6 @@
 class BalanceMultiply:
     def balancePair(self, numA, numB):
         accumulator = 0
-        steps = 0
 
         while True:
             if numA < numB:
@@ -9,8 +8,6 @@ class BalanceMultiply:
 
             if numA == 0 or numB == 0:
                 return (numA, numB, accumulator)
-
-            steps += 1
 
             if numA % 2 == 1 and numB % 2 == 1:
                 if numA // numB > 1:
