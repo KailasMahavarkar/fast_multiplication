@@ -3,7 +3,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use num_bigint::BigUint;
-use learn_rust::balance_multiply::BalanceMultiply;
+use learn_rust::PowerBalanceMultiply;
 
 // ============================================================================
 // Size configurations — switch between them
@@ -13,10 +13,10 @@ const SIZES_BASE: &[usize] = &[
     64, 256, 1024, 4096, 16384, 65536, 262144, 1048576,
 ];
 
-const SIZES_EXTENDED: &[usize] = &[
-    64, 256, 1024, 4096, 16384, 65536, 262144, 1048576,
-    2097152, 4194304, 8388608, 16777216, 33554432, 67108864,
-];
+// const SIZES_EXTENDED: &[usize] = &[
+//     64, 256, 1024, 4096, 16384, 65536, 262144, 1048576,
+//     2097152, 4194304, 8388608, 16777216, 33554432, 67108864,
+// ];
 
 // 🔧 Change this to SIZES_EXTENDED for the full run
 const SIZES: &[usize] = SIZES_BASE;
@@ -34,8 +34,6 @@ fn gen_power_of_two_minus_one(bits: usize) -> BigUint {
 }
 
 fn bench_equal(c: &mut Criterion) {
-    let bm = BalanceMultiply::new();
-
     let mut group = c.benchmark_group("equal");
     group.sample_size(10);
     group.measurement_time(std::time::Duration::from_secs(5));
@@ -45,10 +43,9 @@ fn bench_equal(c: &mut Criterion) {
         let b = &a * 7u64 + 13u64;
 
         group.bench_with_input(BenchmarkId::new("balance", bits), &bits, |bencher, _| {
-            let bm = &bm;
             let a = a.clone();
             let b = b.clone();
-            bencher.iter(|| bm.multiply(black_box(a.clone()), black_box(b.clone())))
+            bencher.iter(|| PowerBalanceMultiply::multiply(black_box(a.clone()), black_box(b.clone())))
         });
 
         group.bench_with_input(BenchmarkId::new("native", bits), &bits, |bencher, _| {
@@ -61,7 +58,6 @@ fn bench_equal(c: &mut Criterion) {
 }
 
 fn bench_imbalanced(c: &mut Criterion) {
-    let bm = BalanceMultiply::new();
     let mut group = c.benchmark_group("imbalanced");
     group.sample_size(10);
     group.measurement_time(std::time::Duration::from_secs(5));
@@ -72,10 +68,9 @@ fn bench_imbalanced(c: &mut Criterion) {
         let label = format!("{}b_{}b", big, small);
 
         group.bench_with_input(BenchmarkId::new("balance", &label), &label, |bencher, _| {
-            let bm = &bm;
             let a = a.clone();
             let b = b.clone();
-            bencher.iter(|| bm.multiply(black_box(a.clone()), black_box(b.clone())))
+            bencher.iter(|| PowerBalanceMultiply::multiply(black_box(a.clone()), black_box(b.clone())))
         });
 
         group.bench_with_input(BenchmarkId::new("native", &label), &label, |bencher, _| {
