@@ -1,16 +1,23 @@
-# BigInteger Multiplication Algorithms
+# fast_multiplication
 
-This repository implements several BigInteger multiplication algorithms in Rust.
-It includes multiple multiplication methods for large numbers, along with benchmarking to compare their performance.
+Experimental BigInteger multiplication algorithms in Rust.
 
-## Features
+## Algorithms
 
--   **Naive Multiplication**: The straightforward approach for multiplying large numbers.
--   **Karatsuba Multiplication**: An optimized divide-and-conquer algorithm for faster multiplication.
--   **Power of Two Multiplication**: A method leveraging precomputed powers of 2 for optimization.
--   **Balanced Multiplication**: A variant designed to balance the recursive calls in multiplication.
--   **Benchmarking**: A set of benchmarks to compare the performance of the different multiplication methods.
+- **Naive** — basic schoolbook multiplication
+- **Karatsuba** — O(n^1.585) divide-and-conquer
+- **Power of Two** — precomputed power-of-2 optimization
+- **BalanceMultiply** — iterative parity-based balancing with Euclidean decomposition
+- **PowerBalanceMultiply** — O(1)-step recursive power-of-two splitting
 
+## Benchmark
+
+```sh
+cargo bench --bench multiply
+```
+
+Tests equal-size and imbalanced inputs against native `num-bigint` `*`.
 
 ## License
-**License📃: BSD 3-Clause License - see the [LICENSE](LICENSE.txt) file for details**
+
+BSD 3-Clause — see [LICENSE.txt](LICENSE.txt)
