@@ -29,7 +29,7 @@ impl PowerBalanceMultiply {
         let mask = (BigUint::from(1u32) << delta as usize) - 1u32;
         r &= mask;
 
-        let mut b_shifted = num_b;
+        let mut b_shifted = num_b.clone();
         b_shifted <<= delta as usize;
 
         let balanced_product = q * b_shifted;
