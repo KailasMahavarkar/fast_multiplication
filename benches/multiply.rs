@@ -3,7 +3,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use num_bigint::BigUint;
-use learn_rust::PowerBalanceMultiply;
+use learn_rust::{NttMultiply, PowerBalanceMultiply};
 
 // ============================================================================
 // Size configurations — switch between them
@@ -82,5 +82,25 @@ fn bench_imbalanced(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_equal, bench_imbalanced);
+fn bench_ntt(c: &mut Criterion) {
+    let mut group = c.benchmark_group("ntt");
+    group.sample_size(10);
+    group.measurement_time(std::time::Duration::from_secs(5));
+
+    for &bits in &[32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304] {
+        let a = gen_random_bits(bits);
+        let b = &a * 7u64 + 13u64;
+
+        group.bench_with_input(BenchmarkId::new("ntt", bits), &bits, |bencher, _| {
+            bencher.iter(|| NttMultiply::multiply(black_box(&a), black_box(&b)))
+        });
+
+        group.bench_with_input(BenchmarkId::new("native", bits), &bits, |bencher, _| {
+            bencher.iter(|| black_box(&a) * black_box(&b))
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_equal, bench_imbalanced, bench_ntt);
 criterion_main!(benches);
