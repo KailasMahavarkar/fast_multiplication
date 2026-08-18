@@ -1,10 +1,13 @@
 use num_bigint::BigUint;
+use rayon::prelude::*;
 
 // Goldilocks prime: 2^64 - 2^32 + 1. Two-adicity 32, primitive root 7.
 const P: u64 = 0xFFFF_FFFF_0000_0001;
 const EPSILON: u64 = 0xFFFF_FFFF;
 const GENERATOR: u64 = 7;
 const THRESHOLD_BITS: u64 = 1 << 15;
+const PAR_MIN_POINTS: usize = 1 << 14;
+const INNER_CHUNK: usize = 1 << 12;
 
 pub struct NttMultiply;
 
@@ -57,7 +60,17 @@ fn pow_mod(mut base: u64, mut exp: u64) -> u64 {
     acc
 }
 
-fn ntt(a: &mut [u64], omega: u64) {
+fn build_twiddles(n: usize, omega: u64) -> Vec<u64> {
+    let mut tw = Vec::with_capacity(n / 2);
+    let mut w = 1u64;
+    for _ in 0..n / 2 {
+        tw.push(w);
+        w = mul_mod(w, omega);
+    }
+    tw
+}
+
+fn bit_reverse(a: &mut [u64]) {
     let n = a.len();
     let mut j = 0usize;
     for i in 1..n {
@@ -71,17 +84,43 @@ fn ntt(a: &mut [u64], omega: u64) {
             a.swap(i, j);
         }
     }
+}
+
+#[inline]
+fn butterfly_span(lo: &mut [u64], hi: &mut [u64], tw: &[u64], base: usize, stride: usize) {
+    for j in 0..lo.len() {
+        let t = mul_mod(tw[(base + j) * stride], hi[j]);
+        let u = lo[j];
+        lo[j] = add_mod(u, t);
+        hi[j] = sub_mod(u, t);
+    }
+}
+
+fn ntt(a: &mut [u64], tw: &[u64]) {
+    let n = a.len();
+    bit_reverse(a);
+    let parallel = n >= PAR_MIN_POINTS;
     let mut m = 1usize;
     while m < n {
-        let wm = pow_mod(omega, (n / (2 * m)) as u64);
-        for k in (0..n).step_by(2 * m) {
-            let mut w = 1u64;
-            for x in 0..m {
-                let t = mul_mod(w, a[k + x + m]);
-                let u = a[k + x];
-                a[k + x] = add_mod(u, t);
-                a[k + x + m] = sub_mod(u, t);
-                w = mul_mod(w, wm);
+        let stride = n / (2 * m);
+        if parallel {
+            a.par_chunks_mut(2 * m).for_each(|chunk| {
+                let (lo, hi) = chunk.split_at_mut(m);
+                if m >= 2 * INNER_CHUNK {
+                    lo.par_chunks_mut(INNER_CHUNK)
+                        .zip(hi.par_chunks_mut(INNER_CHUNK))
+                        .enumerate()
+                        .for_each(|(ci, (lc, hc))| {
+                            butterfly_span(lc, hc, tw, ci * INNER_CHUNK, stride);
+                        });
+                } else {
+                    butterfly_span(lo, hi, tw, 0, stride);
+                }
+            });
+        } else {
+            for chunk in a.chunks_mut(2 * m) {
+                let (lo, hi) = chunk.split_at_mut(m);
+                butterfly_span(lo, hi, tw, 0, stride);
             }
         }
         m *= 2;
@@ -127,20 +166,30 @@ impl NttMultiply {
         let n = (da.len() + db.len()).next_power_of_two();
 
         let omega = pow_mod(GENERATOR, (P - 1) / n as u64);
+        let tw = build_twiddles(n, omega);
         let mut fa = da;
         fa.resize(n, 0);
         let mut fb = db;
         fb.resize(n, 0);
-        ntt(&mut fa, omega);
-        ntt(&mut fb, omega);
-        for i in 0..n {
-            fa[i] = mul_mod(fa[i], fb[i]);
-        }
-        let omega_inv = pow_mod(omega, P - 2);
-        ntt(&mut fa, omega_inv);
+        rayon::join(|| ntt(&mut fa, &tw), || ntt(&mut fb, &tw));
         let n_inv = pow_mod(n as u64, P - 2);
-        for v in fa.iter_mut() {
-            *v = mul_mod(*v, n_inv);
+        if n >= PAR_MIN_POINTS {
+            fa.par_iter_mut().zip(fb.par_iter()).for_each(|(x, y)| {
+                *x = mul_mod(*x, *y);
+            });
+        } else {
+            for i in 0..n {
+                fa[i] = mul_mod(fa[i], fb[i]);
+            }
+        }
+        let tw_inv = build_twiddles(n, pow_mod(omega, P - 2));
+        ntt(&mut fa, &tw_inv);
+        if n >= PAR_MIN_POINTS {
+            fa.par_iter_mut().for_each(|v| *v = mul_mod(*v, n_inv));
+        } else {
+            for v in fa.iter_mut() {
+                *v = mul_mod(*v, n_inv);
+            }
         }
         from_u16_carries(&fa)
     }
@@ -193,8 +242,8 @@ mod tests {
         let original: Vec<u64> = (0..n).map(|_| rng.gen::<u64>() % P).collect();
         let mut a = original.clone();
         let omega = pow_mod(GENERATOR, (P - 1) / n as u64);
-        ntt(&mut a, omega);
-        ntt(&mut a, pow_mod(omega, P - 2));
+        ntt(&mut a, &build_twiddles(n, omega));
+        ntt(&mut a, &build_twiddles(n, pow_mod(omega, P - 2)));
         let n_inv = pow_mod(n as u64, P - 2);
         for v in a.iter_mut() {
             *v = mul_mod(*v, n_inv);
